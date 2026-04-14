@@ -57,6 +57,31 @@ python api.py
 # Then visit http://localhost:8000/docs
 ```
 
+## Deploy to Vercel
+
+This repo is now configured for Vercel Python serverless deployment.
+
+1. Build the FAISS index locally once:
+
+```bash
+python pipeline.py
+```
+
+2. Ensure these files exist and are committed:
+   - `cache/faiss_indices/comments_multi-qa-MiniLM-L6-cos-v1.index`
+   - `cache/faiss_indices/comments_multi-qa-MiniLM-L6-cos-v1.meta`
+
+3. Deploy:
+
+```bash
+vercel --prod
+```
+
+Notes:
+- `vercel.json` routes all requests to `api.py`.
+- Runtime cache/output writes are redirected to `/tmp` on Vercel automatically.
+- First request can be slower due to model cold start.
+
 ## Using Real Reddit Data
 
 Set environment variables before running:

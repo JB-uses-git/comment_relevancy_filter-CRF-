@@ -8,17 +8,31 @@ from pathlib import Path
 
 # ─── Project Paths ───────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).parent
+IS_VERCEL = bool(os.getenv("VERCEL"))
+
+# Keep repository data/cache paths for reading bundled assets (e.g., FAISS index).
 DATA_DIR = PROJECT_ROOT / "data"
 CACHE_DIR = PROJECT_ROOT / "cache"
-OUTPUT_DIR = PROJECT_ROOT / "output"
-MODEL_CACHE_DIR = CACHE_DIR / "models"
-EMBEDDING_CACHE_DIR = CACHE_DIR / "embeddings"
 FAISS_INDEX_DIR = CACHE_DIR / "faiss_indices"
 
-# Create dirs on import
-for d in [DATA_DIR, CACHE_DIR, OUTPUT_DIR, MODEL_CACHE_DIR,
-          EMBEDDING_CACHE_DIR, FAISS_INDEX_DIR]:
+# Use a writable runtime directory on Vercel (/tmp is writable there).
+RUNTIME_ROOT = (
+    Path(os.getenv("CRF_RUNTIME_DIR", "/tmp/comment_relevancy_filter"))
+    if IS_VERCEL
+    else PROJECT_ROOT
+)
+OUTPUT_DIR = RUNTIME_ROOT / "output"
+MODEL_CACHE_DIR = RUNTIME_ROOT / "cache" / "models"
+EMBEDDING_CACHE_DIR = RUNTIME_ROOT / "cache" / "embeddings"
+
+# Create only writable runtime dirs on import.
+for d in [OUTPUT_DIR, MODEL_CACHE_DIR, EMBEDDING_CACHE_DIR]:
     d.mkdir(parents=True, exist_ok=True)
+
+# Ensure transformer/model downloads use writable cache paths in serverless runtime.
+os.environ.setdefault("HF_HOME", str(MODEL_CACHE_DIR))
+os.environ.setdefault("TRANSFORMERS_CACHE", str(MODEL_CACHE_DIR))
+os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", str(MODEL_CACHE_DIR))
 
 # ─── Reddit API (PRAW) ──────────────────────────────────────────────────────
 # Set these as environment variables or fill in directly
