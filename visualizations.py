@@ -15,6 +15,7 @@ from sklearn.metrics import (
     recall_score,
     f1_score,
     auc,
+    roc_curve,
 )
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -79,7 +80,7 @@ def plot_score_distribution(
     if save:
         path = OUTPUT_DIR / "score_distribution.png"
         fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
-        print(f"💾 Saved: {path}")
+        print(f"Saved: {path}")
     plt.show()
     plt.close()
 
@@ -113,7 +114,7 @@ def plot_f1_vs_threshold(
     if save:
         path = OUTPUT_DIR / "f1_vs_threshold.png"
         fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
-        print(f"💾 Saved: {path}")
+        print(f"Saved: {path}")
     plt.show()
     plt.close()
 
@@ -152,7 +153,7 @@ def plot_confusion_matrix(
     if save:
         path = OUTPUT_DIR / f"confusion_matrix_{split_name}.png"
         fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
-        print(f"💾 Saved: {path}")
+        print(f"Saved: {path}")
     plt.show()
     plt.close()
 
@@ -196,9 +197,43 @@ def plot_precision_recall_curve(
     if save:
         path = OUTPUT_DIR / f"precision_recall_{split_name}.png"
         fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
-        print(f"💾 Saved: {path}")
+        print(f"Saved: {path}")
     plt.show()
     plt.close()
+
+
+def plot_roc_curve(
+    y_true: np.ndarray,
+    scores: np.ndarray,
+    split_name: str = "test",
+    save: bool = True,
+) -> None:
+    """Plot Receiver Operating Characteristic (ROC) curve."""
+    fpr, tpr, _ = roc_curve(y_true, scores)
+    roc_auc = auc(fpr, tpr)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.plot(fpr, tpr, color=COLORS["line"], linewidth=2.5,
+            label=f"ROC curve (AUC = {roc_auc:.3f})")
+    ax.plot([0, 1], [0, 1], color=COLORS["irrelevant"], linestyle="--", linewidth=2, label="Random Guess")
+    ax.fill_between(fpr, tpr, alpha=0.1, color=COLORS["line"])
+
+    ax.set_xlabel("False Positive Rate", fontsize=12)
+    ax.set_ylabel("True Positive Rate", fontsize=12)
+    ax.set_title(f"ROC Curve — {split_name.upper()} Set", fontsize=13, fontweight="bold")
+    ax.legend(fontsize=10, facecolor=COLORS["bg_card"], edgecolor="#555", loc="lower right")
+    ax.set_xlim([0, 1.0])
+    ax.set_ylim([0, 1.05])
+    ax.grid(alpha=0.2)
+
+    plt.tight_layout()
+    if save:
+        path = OUTPUT_DIR / f"roc_curve_{split_name}.png"
+        fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"Saved: {path}")
+    plt.show()
+    plt.close()
+
 
 
 def plot_top_comments(
@@ -236,7 +271,7 @@ def plot_top_comments(
     line_handle = plt.Line2D([0], [0], color=COLORS["highlight"], linestyle="--", label=f"T={threshold}")
     ax1.legend(handles=[green_patch, red_patch, line_handle], fontsize=8, loc="lower right",
                facecolor=COLORS["bg_card"], edgecolor="#555")
-    ax1.set_xlim(0, max(top_df["relevance_score"]) + 0.1)
+    ax1.set_xlim(min(0, top_df["relevance_score"].min()) - 0.05, max(top_df["relevance_score"]) + 0.1)
     ax1.grid(axis="x", alpha=0.2)
 
     # ── Panel 2: Scatter plot ──
@@ -270,7 +305,7 @@ def plot_top_comments(
     if save:
         path = OUTPUT_DIR / "top_comments_analysis.png"
         fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
-        print(f"💾 Saved: {path}")
+        print(f"Saved: {path}")
     plt.show()
     plt.close()
 
@@ -304,7 +339,7 @@ def plot_model_comparison(
     if save:
         path = OUTPUT_DIR / "model_comparison.png"
         fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
-        print(f"💾 Saved: {path}")
+        print(f"Saved: {path}")
     plt.show()
     plt.close()
 
@@ -341,7 +376,7 @@ def plot_cross_encoder_improvement(
     if save:
         path = OUTPUT_DIR / "cross_encoder_comparison.png"
         fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
-        print(f"💾 Saved: {path}")
+        print(f"Saved: {path}")
     plt.show()
     plt.close()
 
@@ -375,6 +410,6 @@ def plot_multi_question_results(
     if save:
         path = OUTPUT_DIR / "multi_question_results.png"
         fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
-        print(f"💾 Saved: {path}")
+        print(f"Saved: {path}")
     plt.show()
     plt.close()

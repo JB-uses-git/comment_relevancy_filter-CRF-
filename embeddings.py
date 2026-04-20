@@ -35,9 +35,9 @@ class EmbeddingEngine:
     @property
     def model(self) -> SentenceTransformer:
         if self._model is None:
-            print(f"🔄 Loading bi-encoder: {self.model_name}")
+            print(f"Loading bi-encoder: {self.model_name}")
             self._model = SentenceTransformer(self.model_name)
-            print(f"✅ Model loaded: {self.model_name}")
+            print(f"Model loaded: {self.model_name}")
         return self._model
 
     def _cache_key(self, texts: List[str]) -> str:
@@ -135,7 +135,7 @@ class EmbeddingEngine:
             self._faiss_index.train(embeddings.astype(np.float32))
 
         self._faiss_index.add(embeddings.astype(np.float32))
-        print(f"✅ FAISS index built: {self._faiss_index.ntotal} vectors, dim={dim}")
+        print(f"FAISS index built: {self._faiss_index.ntotal} vectors, dim={dim}")
 
     def search_faiss(
         self,
@@ -169,7 +169,7 @@ class EmbeddingEngine:
         with open(meta_path, "wb") as f:
             pickle.dump(self._indexed_texts, f)
 
-        print(f"💾 FAISS index saved: {index_path}")
+        print(f"FAISS index saved: {index_path}")
         return index_path
 
     def load_faiss_index(self, name: str = "default") -> bool:
@@ -184,7 +184,7 @@ class EmbeddingEngine:
         with open(meta_path, "rb") as f:
             self._indexed_texts = pickle.load(f)
 
-        print(f"📂 FAISS index loaded: {self._faiss_index.ntotal} vectors")
+        print(f"FAISS index loaded: {self._faiss_index.ntotal} vectors")
         return True
 
 
@@ -202,9 +202,9 @@ class CrossEncoderReranker:
     @property
     def model(self) -> CrossEncoder:
         if self._model is None:
-            print(f"🔄 Loading cross-encoder: {self.model_name}")
+            print(f"Loading cross-encoder: {self.model_name}")
             self._model = CrossEncoder(self.model_name)
-            print(f"✅ Cross-encoder loaded: {self.model_name}")
+            print(f"Cross-encoder loaded: {self.model_name}")
         return self._model
 
     def rerank(

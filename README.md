@@ -1,154 +1,91 @@
-# 🎮 Comment Relevancy Filter v3
+# 🎮 Gaming Semantic Search Filter (Standard IR Pipeline)
 
-**NLP-powered system that filters forum comments by semantic relevance to a question.**
+**A local Machine Learning Information Retrieval system that matches user queries to the most semantically relevant gaming forum comments.**
 
-Separates genuinely helpful strategy tips from viral jokes/memes — even when irrelevant comments have 10x more upvotes.
+This project acts as an offline, dynamic search engine. It solves the problem of simple keyword-matching by using a two-stage Dense Retriever (Bi-Encoder) and Reranker (Cross-Encoder) to understand the *intent* of queries and comments, accurately separating genuinely helpful strategy tips from viral jokes/memes.
 
-## Architecture
+## 🚀 How to Run
 
-```
-Question + Context
-       │
-       ▼
-  ┌─────────────┐     ┌───────────────┐
-  │ Bi-Encoder   │────▶│ FAISS Index   │  (ANN search, cached embeddings)
-  │ (3 models)   │     └───────────────┘
-  └──────┬───────┘
-         │ top-k candidates
-         ▼
-  ┌─────────────────┐
-  │ Cross-Encoder    │  (reranking for better accuracy)
-  │ ms-marco-MiniLM  │
-  └──────┬──────────┘
-         │ reranked scores
-         ▼
-  ┌─────────────┐
-  │ Threshold    │  (optimized on validation set)
-  │ Filter       │
-  └──────┬───────┘
-         │
-    Relevant / Irrelevant
-```
-
-## Features
-
-- **Real Data**: Reddit API scraping via PRAW (r/Eldenring, r/gaming) — falls back to 300-comment synthetic dataset
-- **Proper Evaluation**: Train/Val/Test splits — threshold optimized on val, evaluated on held-out test
-- **Multi-Model Comparison**: `all-MiniLM-L6-v2`, `all-mpnet-base-v2`, `multi-qa-MiniLM-L6-cos-v1`
-- **Cross-Encoder Reranking**: Bi-encoder retrieval → cross-encoder (`ms-marco-MiniLM-L-6-v2`) reranking
-- **FAISS Vector Store**: Pre-computed embeddings indexed for ANN search
-- **Embedding Cache**: Disk-cached embeddings — no re-encoding on repeat runs
-- **NDCG Metric**: Ranking-aware evaluation, not just binary classification
-- **Multi-Question Testing**: Tests threshold generalization across 3 different questions
-- **FastAPI Endpoint**: Deployable API with `/rank` and `/search` endpoints
-- **Full Visualizations**: Score distributions, PR curves, confusion matrices, model comparisons
-
-## Quick Start
-
+**1. Install Dependencies**
 ```bash
-# Install dependencies
 pip install -r requirements.txt
-
-# Run the full pipeline
-python pipeline.py
-
-# Start the API server
-python api.py
-# Then visit http://localhost:8000/docs
 ```
 
-## Deploy to Vercel
+**2. Generate the Dataset**
+*(You must do this first! This locally constructs a balanced 1,000-comment ground-truth dataset across 5 games).*
+```bash
+python dataset_generator.py
+```
 
-This repo is now configured for Vercel Python serverless deployment.
-
-1. Build the FAISS index locally once:
-
+**3. Run the Evaluation & Search Engine (CLI)**
 ```bash
 python pipeline.py
 ```
+*Wait ~10 seconds for the evaluation script to calculate thresholds and metric scores. At the very end, it will open an interactive CLI where you can type your own gaming questions and get live semantic search results!*
 
-2. Ensure these files exist and are committed:
-   - `cache/faiss_indices/comments_multi-qa-MiniLM-L6-cos-v1.index`
-   - `cache/faiss_indices/comments_multi-qa-MiniLM-L6-cos-v1.meta`
-
-3. Deploy:
-
+**4. Run the Web Interface (Optional)**
+If you prefer a visual experience, a Streamlit frontend is included!
 ```bash
-vercel --prod
+streamlit run app.py
 ```
 
-Notes:
-- `vercel.json` routes all requests to `api.py`.
-- Runtime cache/output writes are redirected to `/tmp` on Vercel automatically.
-- First request can be slower due to model cold start.
+---
 
-## Using Real Reddit Data
+## 🧠 Architecture Overview
 
-Set environment variables before running:
+Instead of hardcoded rules, this uses a standard production NLP pattern:
 
-```bash
-set REDDIT_CLIENT_ID=your_client_id
-set REDDIT_CLIENT_SECRET=your_client_secret
-python pipeline.py
+```text
+  [Massive Offline Dataset] 
+          │
+          ▼
+   ┌───────────────┐     ┌───────────────┐
+   │ Bi-Encoder    │────▶│ FAISS Index   │  (ANN search, builds vector db)
+   │ MiniLM-L6     │     └───────────────┘
+   └──────┬────────┘
+          │ 
+     Fast Retrieval (Top-10 Candidates)
+          │
+          ▼
+   ┌─────────────────┐
+   │ Cross-Encoder   │  (Heavy context reranking)
+   │ ms-marco        │
+   └──────┬──────────┘
+          │
+          ▼
+    Sorted Relevant Results!
 ```
 
-Get credentials at https://www.reddit.com/prefs/apps (create a "script" app).
+## ✨ Key Features
 
-### Labeling real data (recommended)
+- **True Ground Truth Data**: Utilizes a pre-built, perfectly balanced 1,000 comment dataset (`dataset_generator.py`). No more weak heuristic labeling!
+- **Dynamic Inference**: There are no hardcoded evaluation arrays. You can literally swap the CSV file to a medical dataset, and it instantly becomes a medical search engine.
+- **Two-Stage IR Pipeline**: Uses `multi-qa-MiniLM-L6-cos-v1` for blazing-fast FAISS retrieval, and `cross-encoder/ms-marco-MiniLM-L-6-v2` for precise semantic reranking.
+- **Strict ML Metrics**: Evaluates using robust Information Retrieval metrics like **NDCG** (Normalized Discounted Cumulative Gain) and **PR-AUC**.
+- **Interactive CLI**: Lets you query the vector database in real-time right in your terminal.
 
-For honest model evaluation, store human-labeled Reddit comments in:
+## 📂 Project Structure
 
-`data/reddit_comments_labeled.csv`
-
-Required columns:
-
-- `comment`
-- `upvotes`
-- `true_label` (1 relevant, 0 irrelevant)
-- `topic` (`elden_beast`, `malenia_strategy`, `best_build`, or `irrelevant`)
-
-If this file is missing, the pipeline will still run by applying weak heuristic labels to raw scraped data. That path is useful for smoke testing but should not be treated as final quality evaluation.
-
-## API Usage
-
-```bash
-# Start server
-python api.py
-
-# Rank comments
-curl -X POST http://localhost:8000/rank \
-  -H "Content-Type: application/json" \
-  -d '{
-    "question": "How to beat Elden Beast?",
-    "comments": ["Use bleed build", "Git gud lol", "Black Flame works great"],
-    "threshold": 0.3,
-    "use_cross_encoder": true
-  }'
-```
-
-## Project Structure
-
-```
+```text
 comment_relevancy_filter/
-├── config.py           # All settings: models, paths, thresholds
-├── data_scraper.py     # Reddit PRAW scraper + synthetic fallback
-├── embeddings.py       # Bi-encoder, cross-encoder, FAISS, caching
-├── evaluation.py       # Splits, metrics, NDCG, multi-question
-├── visualizations.py   # All charts and plots
-├── api.py              # FastAPI server
-├── pipeline.py         # Main end-to-end pipeline
-├── requirements.txt    # Dependencies
-├── data/               # Raw and processed data
-├── cache/              # Embedding cache + FAISS indices
-└── output/             # Generated charts and reports
+├── dataset_generator.py  # Builds the balanced 'gaming_queries_dataset.csv' target dataset
+├── config.py             # All settings: ML models, metric thresholds, file paths
+├── embeddings.py         # Handles Bi-encoder mapping, FAISS, and Cross-Encoder indexing
+├── evaluation.py         # Standard ML Train/Val/Test splits, NDCG, PR-AUC metrics
+├── visualizations.py     # Matplotlib charts for analysis (confusion matrix, distributions)
+├── pipeline.py           # Main execution loop and CLI Interactive Engine
+├── requirements.txt      # Python Dependencies
+├── data/                 # Raw and processed datasets
+├── cache/                # Embedding cache + local FAISS indices
+└── output/               # Generated png charts and reports
 ```
 
-## Metrics
+## 📊 Metrics Explained
 
-| Metric | What it measures |
+| Metric | What it measures in this pipeline |
 |--------|-----------------|
-| Precision | Of comments predicted relevant, how many actually were |
-| Recall | Of truly relevant comments, how many were caught |
-| F1 | Harmonic mean of precision and recall |
-| PR-AUC | Area under precision-recall curve |
-| NDCG@k | Ranking quality — rewards placing relevant items higher |
+| **Precision** | Out of all comments the AI said were helpful, how many actually were? |
+| **Recall** | Out of all the truly helpful comments sitting in the database, how many did the AI successfully find? |
+| **F1** | The harmonic average of Precision and Recall. |
+| **NDCG** | Extremely important ranking metric! It rewards the AI for putting the absolute *best* answer at #1, rather than #5. |
+| **ROC** | Standard evaluation curve tracking true positive versus false positive rating across all thresholds! |

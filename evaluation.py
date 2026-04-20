@@ -21,7 +21,7 @@ from sklearn.metrics import (
 
 from config import (
     TEST_SPLIT_RATIO, VAL_SPLIT_RATIO, RANDOM_SEED,
-    THRESHOLD_SWEEP_RANGE, EVALUATION_QUESTIONS
+    THRESHOLD_SWEEP_RANGE
 )
 
 
@@ -65,7 +65,7 @@ def create_splits(
         val = val.reset_index(drop=True)
         test = test.reset_index(drop=True)
 
-        print(f"📊 Data splits:")
+        print(f"Data splits:")
         print(f"   Train: {len(train)} ({train['true_label'].mean():.1%} relevant)")
         print(f"   Val  : {len(val)} ({val['true_label'].mean():.1%} relevant)")
         print(f"   Test : {len(test)} ({test['true_label'].mean():.1%} relevant)")
@@ -78,7 +78,11 @@ def create_splits(
     )
 
     # Second split: separate validation from training
-    adjusted_val_ratio = val_ratio / (1 - test_ratio)
+    if isinstance(test_ratio, int) and isinstance(val_ratio, int):
+        adjusted_val_ratio = val_ratio
+    else:
+        adjusted_val_ratio = val_ratio / (1 - test_ratio)
+        
     train, val = train_test_split(
         train_val, test_size=adjusted_val_ratio, random_state=seed,
         stratify=train_val["true_label"]
@@ -88,7 +92,7 @@ def create_splits(
     val = val.reset_index(drop=True)
     test = test.reset_index(drop=True)
 
-    print(f"📊 Data splits:")
+    print(f"Data splits:")
     print(f"   Train: {len(train)} ({train['true_label'].mean():.1%} relevant)")
     print(f"   Val  : {len(val)} ({val['true_label'].mean():.1%} relevant)")
     print(f"   Test : {len(test)} ({test['true_label'].mean():.1%} relevant)")
@@ -119,7 +123,7 @@ def find_optimal_threshold(
     optimal = round(thresholds[best_idx], 3)
     best_f1 = f1_scores_list[best_idx]
 
-    print(f"🎯 Optimal threshold: {optimal} (F1={best_f1:.3f})")
+    print(f"Optimal threshold: {optimal} (F1={best_f1:.3f})")
     return optimal, best_f1, f1_scores_list, thresholds
 
 
@@ -128,6 +132,7 @@ def evaluate_threshold(
     scores: np.ndarray,
     threshold: float,
     split_name: str = "test",
+    queries: Optional[np.ndarray] = None,
 ) -> Dict:
     """
     Evaluate a fixed threshold on a dataset. Use on the held-out TEST set
@@ -150,7 +155,7 @@ def evaluate_threshold(
     pr_auc_val = auc(recall_vals, precision_vals)
 
     # NDCG — treats relevance scores as ranking
-    ndcg = compute_ndcg(y_true, scores)
+    ndcg = compute_ndcg(y_true, scores, queries=queries)
 
     results = {
         "split": split_name,
@@ -177,24 +182,51 @@ def compute_ndcg(
     y_true: np.ndarray,
     scores: np.ndarray,
     k_values: List[int] = [5, 10, 20, None],
+    queries: Optional[np.ndarray] = None,
 ) -> Dict:
     """
     Compute NDCG (Normalized Discounted Cumulative Gain) at various k values.
 
     NDCG rewards ranking relevant documents higher — more meaningful than
     binary classification for information retrieval.
+    Computes mean NDCG across all queries if queries array is provided.
     """
-    y_true_2d = y_true.reshape(1, -1)
-    scores_2d = scores.reshape(1, -1)
-
     ndcg_results = {}
-    for k in k_values:
-        label = f"@{k}" if k else "@all"
-        try:
-            ndcg_val = ndcg_score(y_true_2d, scores_2d, k=k)
-            ndcg_results[label] = ndcg_val
-        except Exception:
-            ndcg_results[label] = 0.0
+    
+    if queries is not None:
+        unique_queries = np.unique(queries)
+        ndcgs = {k: [] for k in k_values}
+        for q in unique_queries:
+            mask = (queries == q)
+            q_true = y_true[mask].reshape(1, -1)
+            q_scores = scores[mask].reshape(1, -1)
+            
+            # Skip if there's no ground truth variance or no items
+            if q_true.shape[1] < 2 or np.sum(q_true) == 0:
+                continue
+                
+            for k in k_values:
+                try:
+                    val = ndcg_score(q_true, q_scores, k=k)
+                    ndcgs[k].append(val)
+                except Exception:
+                    pass
+                    
+        for k in k_values:
+            label = f"@{k}" if k else "@all"
+            ndcg_results[label] = round(np.mean(ndcgs[k]), 3) if len(ndcgs[k]) > 0 else 0.0
+            
+    else:
+        y_true_2d = y_true.reshape(1, -1)
+        scores_2d = scores.reshape(1, -1)
+
+        for k in k_values:
+            label = f"@{k}" if k else "@all"
+            try:
+                ndcg_val = ndcg_score(y_true_2d, scores_2d, k=k)
+                ndcg_results[label] = round(ndcg_val, 3)
+            except Exception:
+                ndcg_results[label] = 0.0
 
     return ndcg_results
 
@@ -205,56 +237,8 @@ def evaluate_multiple_questions(
     threshold: float,
     questions: List[Dict] = None,
 ) -> pd.DataFrame:
-    """
-    Test threshold generalization across multiple different questions.
-    `encode_fn` should accept (question, context, comments) and return scores.
-    """
-    questions = questions or EVALUATION_QUESTIONS
-    results = []
-
-    for q_config in questions:
-        qid = q_config["id"]
-        question = q_config["question"]
-        context = q_config.get("context", "")
-
-        # Filter dataset to relevant topic + irrelevant comments
-        topic_df = df[
-            (df["topic"] == qid) | (df["topic"] == "irrelevant")
-        ].copy()
-
-        if len(topic_df) == 0:
-            print(f"  ⚠️ No data for question '{qid}', skipping")
-            continue
-
-        comments = topic_df["comment"].tolist()
-        y_true = topic_df["true_label"].values
-
-        # Get scores
-        scores = encode_fn(question, context, comments)
-
-        # Evaluate
-        y_pred = (scores >= threshold).astype(int)
-        f1 = f1_score(y_true, y_pred, zero_division=0)
-        prec = precision_score(y_true, y_pred, zero_division=0)
-        rec = recall_score(y_true, y_pred, zero_division=0)
-        ndcg = compute_ndcg(y_true, scores)
-
-        results.append({
-            "question_id": qid,
-            "question": question[:80],
-            "n_comments": len(topic_df),
-            "n_relevant": int(y_true.sum()),
-            "n_irrelevant": int((y_true == 0).sum()),
-            "precision": round(prec, 3),
-            "recall": round(rec, 3),
-            "f1": round(f1, 3),
-            "ndcg@10": round(ndcg.get("@10", 0), 3),
-            "ndcg@all": round(ndcg.get("@all", 0), 3),
-        })
-
-        print(f"  ✅ {qid}: F1={f1:.3f}, P={prec:.3f}, R={rec:.3f}, NDCG@10={ndcg.get('@10', 0):.3f}")
-
-    return pd.DataFrame(results)
+    # Deprecated: The pipeline now computes performance against a unified dataframe of (query, comment) pairs.
+    pass
 
 
 def compare_models(
@@ -303,7 +287,7 @@ def compare_models(
 
 def _print_results(results: Dict) -> None:
     """Pretty-print evaluation results."""
-    sep = "═" * 55
+    sep = "=" * 55
     print(f"\n{sep}")
     print(f"  EVALUATION RESULTS — {results['split'].upper()} SET")
     print(f"  ({results['n_samples']} samples, threshold={results['threshold']})")
@@ -314,7 +298,7 @@ def _print_results(results: Dict) -> None:
     print(f"  F1 Score  : {results['f1']:.3f}")
     print(f"  PR-AUC    : {results['pr_auc']:.3f}")
     print(f"  NDCG      : {results['ndcg']}")
-    print(f"  ───────────────────────────────────────")
+    print(f"  ---------------------------------------")
     print(f"  TP={results['true_positives']}  FP={results['false_positives']}  "
           f"TN={results['true_negatives']}  FN={results['false_negatives']}")
     print(f"{sep}")
