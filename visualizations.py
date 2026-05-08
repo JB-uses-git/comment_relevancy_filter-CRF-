@@ -25,27 +25,27 @@ from config import OUTPUT_DIR
 
 # ─── Style Setup ─────────────────────────────────────────────────────────────
 plt.rcParams.update({
-    "figure.facecolor": "#1a1a2e",
-    "axes.facecolor": "#16213e",
-    "axes.edgecolor": "#e94560",
-    "axes.labelcolor": "#eee",
-    "text.color": "#eee",
-    "xtick.color": "#ccc",
-    "ytick.color": "#ccc",
-    "grid.color": "#333",
-    "grid.alpha": 0.3,
+    "figure.facecolor": "white",
+    "axes.facecolor": "white",
+    "axes.edgecolor": "#cccccc",
+    "axes.labelcolor": "#333333",
+    "text.color": "#333333",
+    "xtick.color": "#555555",
+    "ytick.color": "#555555",
+    "grid.color": "#e0e0e0",
+    "grid.alpha": 0.5,
     "font.family": "sans-serif",
     "font.size": 10,
 })
 
 COLORS = {
-    "relevant": "#00d4aa",
-    "irrelevant": "#e94560",
-    "accent": "#0f3460",
-    "highlight": "#ffd700",
-    "line": "#53a8b6",
-    "bg_dark": "#1a1a2e",
-    "bg_card": "#16213e",
+    "relevant": "#27ae60",
+    "irrelevant": "#e74c3c",
+    "accent": "#2c3e50",
+    "highlight": "#f39c12",
+    "line": "#2980b9",
+    "bg_dark": "white",
+    "bg_card": "white",
 }
 
 
@@ -102,7 +102,7 @@ def plot_f1_vs_threshold(
         x=optimal_threshold, color=COLORS["highlight"], linestyle="--", linewidth=2,
         label=f"Optimal = {optimal_threshold} (F1={best_f1:.3f})"
     )
-    ax.scatter([optimal_threshold], [best_f1], color=COLORS["highlight"], s=100, zorder=5, edgecolors="white")
+    ax.scatter([optimal_threshold], [best_f1], color=COLORS["highlight"], s=100, zorder=5, edgecolors="#888888")
 
     ax.set_xlabel("Threshold", fontsize=12)
     ax.set_ylabel("F1 Score", fontsize=12)
@@ -138,8 +138,8 @@ def plot_confusion_matrix(
         cm, annot=True, fmt="d", cmap=cmap,
         xticklabels=["Pred Irrelevant", "Pred Relevant"],
         yticklabels=["Actual Irrelevant", "Actual Relevant"],
-        linewidths=2, linecolor=COLORS["bg_dark"], cbar=False, ax=ax,
-        annot_kws={"size": 20, "weight": "bold", "color": "#1a1a2e"},
+        linewidths=2, linecolor="white", cbar=False, ax=ax,
+        annot_kws={"size": 20, "weight": "bold", "color": "#2c3e50"},
     )
 
     ax.set_title(
@@ -179,7 +179,7 @@ def plot_precision_recall_curve(
     opt_p = precision_score(y_true, y_pred, zero_division=0)
     opt_r = recall_score(y_true, y_pred, zero_division=0)
     ax.scatter([opt_r], [opt_p], color=COLORS["highlight"], s=150, zorder=5,
-               edgecolors="white", linewidth=2,
+               edgecolors="#888888", linewidth=1.5,
                label=f"Operating point (T={threshold}) → P={opt_p:.2f}, R={opt_r:.2f}")
 
     ax.set_xlabel("Recall", fontsize=12)
@@ -246,7 +246,7 @@ def plot_top_comments(
     fig, axes = plt.subplots(1, 2, figsize=(18, 8))
     fig.suptitle(
         f'Comment Relevancy Filter — Top 20 Upvoted Comments\nQ: "{question[:72]}..."',
-        fontsize=12, fontweight="bold", y=1.02, color="white"
+        fontsize=12, fontweight="bold", y=1.02, color="#333333"
     )
 
     # ── Panel 1: Horizontal bars ──
@@ -279,10 +279,10 @@ def plot_top_comments(
     rel_mask = top_df["relevance_score"] >= threshold
     ax2.scatter(top_df[rel_mask]["relevance_score"], top_df[rel_mask]["upvotes"],
                 color=COLORS["relevant"], s=140, zorder=5, label="Relevant",
-                edgecolors="white", linewidth=0.8, alpha=0.9)
+                edgecolors="#888888", linewidth=0.8, alpha=0.9)
     ax2.scatter(top_df[~rel_mask]["relevance_score"], top_df[~rel_mask]["upvotes"],
                 color=COLORS["irrelevant"], s=140, zorder=5, label="Irrelevant",
-                edgecolors="white", linewidth=0.8, alpha=0.9)
+                edgecolors="#888888", linewidth=0.8, alpha=0.9)
 
     texts = []
     for i, row in top_df.iterrows():
@@ -413,3 +413,153 @@ def plot_multi_question_results(
         print(f"Saved: {path}")
     plt.show()
     plt.close()
+
+
+# ─── Model Comparison Plots ─────────────────────────────────────────────────
+
+MODEL_COLORS = {"ours": "#2980b9", "baseline": "#e67e22"}
+
+
+def plot_comparison_f1_curves(
+    thresholds_1, f1_scores_1, opt_t_1, best_f1_1, label_1,
+    thresholds_2, f1_scores_2, opt_t_2, best_f1_2, label_2,
+    save=True,
+):
+    """Overlaid F1 vs threshold curves comparing two models."""
+    fig, ax = plt.subplots(figsize=(11, 5))
+
+    ax.plot(thresholds_1, f1_scores_1, color=MODEL_COLORS["ours"], linewidth=2.5,
+            label=f"{label_1} (Best F1={best_f1_1:.3f})")
+    ax.plot(thresholds_2, f1_scores_2, color=MODEL_COLORS["baseline"], linewidth=2.5,
+            linestyle="--", label=f"{label_2} (Best F1={best_f1_2:.3f})")
+
+    ax.scatter([opt_t_1], [best_f1_1], color=MODEL_COLORS["ours"], s=120, zorder=5,
+               edgecolors="#888888", marker="o")
+    ax.scatter([opt_t_2], [best_f1_2], color=MODEL_COLORS["baseline"], s=120, zorder=5,
+               edgecolors="#888888", marker="o")
+
+    ax.set_xlabel("Threshold", fontsize=12)
+    ax.set_ylabel("F1 Score", fontsize=12)
+    ax.set_title("Model Comparison: F1 Score vs Threshold", fontsize=13, fontweight="bold")
+    ax.legend(fontsize=10, facecolor="white", edgecolor="#ccc")
+    ax.grid(alpha=0.3)
+
+    plt.tight_layout()
+    if save:
+        path = OUTPUT_DIR / "comparison_f1_curves.png"
+        fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"Saved: {path}")
+    plt.show()
+    plt.close()
+
+
+def plot_comparison_pr_curves(
+    y_true, scores_1, label_1, scores_2, label_2, save=True,
+):
+    """Overlaid Precision-Recall curves comparing two models."""
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    p1, r1, _ = precision_recall_curve(y_true, scores_1)
+    pr_auc_1 = auc(r1, p1)
+    ax.plot(r1, p1, color=MODEL_COLORS["ours"], linewidth=2.5,
+            label=f"{label_1} (AUC={pr_auc_1:.3f})")
+
+    p2, r2, _ = precision_recall_curve(y_true, scores_2)
+    pr_auc_2 = auc(r2, p2)
+    ax.plot(r2, p2, color=MODEL_COLORS["baseline"], linewidth=2.5, linestyle="--",
+            label=f"{label_2} (AUC={pr_auc_2:.3f})")
+
+    ax.set_xlabel("Recall", fontsize=12)
+    ax.set_ylabel("Precision", fontsize=12)
+    ax.set_title("Model Comparison: Precision-Recall Curves", fontsize=13, fontweight="bold")
+    ax.legend(fontsize=10, facecolor="white", edgecolor="#ccc")
+    ax.set_xlim([0, 1.05])
+    ax.set_ylim([0, 1.05])
+    ax.grid(alpha=0.3)
+
+    plt.tight_layout()
+    if save:
+        path = OUTPUT_DIR / "comparison_pr_curves.png"
+        fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"Saved: {path}")
+    plt.show()
+    plt.close()
+
+
+def plot_comparison_roc_curves(
+    y_true, scores_1, label_1, scores_2, label_2, save=True,
+):
+    """Overlaid ROC curves comparing two models."""
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    fpr1, tpr1, _ = roc_curve(y_true, scores_1)
+    roc_auc_1 = auc(fpr1, tpr1)
+    ax.plot(fpr1, tpr1, color=MODEL_COLORS["ours"], linewidth=2.5,
+            label=f"{label_1} (AUC={roc_auc_1:.3f})")
+
+    fpr2, tpr2, _ = roc_curve(y_true, scores_2)
+    roc_auc_2 = auc(fpr2, tpr2)
+    ax.plot(fpr2, tpr2, color=MODEL_COLORS["baseline"], linewidth=2.5, linestyle="--",
+            label=f"{label_2} (AUC={roc_auc_2:.3f})")
+
+    ax.plot([0, 1], [0, 1], color="#cccccc", linestyle=":", linewidth=1.5, label="Random Guess")
+
+    ax.set_xlabel("False Positive Rate", fontsize=12)
+    ax.set_ylabel("True Positive Rate", fontsize=12)
+    ax.set_title("Model Comparison: ROC Curves", fontsize=13, fontweight="bold")
+    ax.legend(fontsize=10, facecolor="white", edgecolor="#ccc", loc="lower right")
+    ax.set_xlim([0, 1.0])
+    ax.set_ylim([0, 1.05])
+    ax.grid(alpha=0.3)
+
+    plt.tight_layout()
+    if save:
+        path = OUTPUT_DIR / "comparison_roc_curves.png"
+        fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"Saved: {path}")
+    plt.show()
+    plt.close()
+
+
+def plot_comparison_metrics_bar(
+    results_1, label_1, results_2, label_2, save=True,
+):
+    """Side-by-side bar chart comparing all metrics for two models."""
+    metrics = ["accuracy", "precision", "recall", "f1", "pr_auc"]
+    metric_labels = ["Accuracy", "Precision", "Recall", "F1 Score", "PR-AUC"]
+
+    vals_1 = [results_1[m] for m in metrics]
+    vals_2 = [results_2[m] for m in metrics]
+
+    x = np.arange(len(metrics))
+    width = 0.3
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    bars1 = ax.bar(x - width / 2, vals_1, width, label=label_1,
+                   color=MODEL_COLORS["ours"], edgecolor="white", linewidth=0.5, alpha=0.9)
+    bars2 = ax.bar(x + width / 2, vals_2, width, label=label_2,
+                   color=MODEL_COLORS["baseline"], edgecolor="white", linewidth=0.5, alpha=0.9)
+
+    for bar in bars1:
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,
+                f"{bar.get_height():.3f}", ha="center", va="bottom", fontsize=9, fontweight="bold")
+    for bar in bars2:
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,
+                f"{bar.get_height():.3f}", ha="center", va="bottom", fontsize=9, fontweight="bold")
+
+    ax.set_ylabel("Score", fontsize=12)
+    ax.set_title("Model Comparison: Evaluation Metrics", fontsize=13, fontweight="bold")
+    ax.set_xticks(x)
+    ax.set_xticklabels(metric_labels, fontsize=11)
+    ax.legend(fontsize=10, facecolor="white", edgecolor="#ccc")
+    ax.set_ylim(0, 1.15)
+    ax.grid(axis="y", alpha=0.3)
+
+    plt.tight_layout()
+    if save:
+        path = OUTPUT_DIR / "comparison_metrics.png"
+        fig.savefig(path, dpi=150, bbox_inches="tight", facecolor=fig.get_facecolor())
+        print(f"Saved: {path}")
+    plt.show()
+    plt.close()
+

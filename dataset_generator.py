@@ -269,6 +269,12 @@ def generate_balanced_dataset():
         ]
     }
 
+    # ─── Game-to-Query Mapping (for restricting hard negatives to different games) ───
+    game_labels = {}
+    game_names = ["elden_ring"] * 4 + ["valorant"] * 4 + ["cyberpunk"] * 4 + ["csgo"] * 4 + ["minecraft"] * 4
+    for (q, _), g in zip(queries_data.items(), game_names):
+        game_labels[q] = g
+
     # ─── NEGATIVE DATA GENERATORS ───
     generic_negatives = [
         "Bro just git gud lmao.",
@@ -295,7 +301,36 @@ def generate_balanced_dataset():
         "Petition to ban the developers.",
         "Does anyone know when the DLC drops?",
         "Wait for the mobile port.",
-        "I literally fell asleep reading this post."
+        "I literally fell asleep reading this post.",
+        "I just started playing this game yesterday and I have no idea what's going on.",
+        "Someone please help me find a good monitor for gaming.",
+        "Is this game worth buying on sale?",
+        "Just watched a streamer play this, looks fun.",
+        "Anyone want to queue together? Drop your discord.",
+        "My internet is lagging hard today, can't even play.",
+        "I think the soundtrack is the best part of this game.",
+        "The graphics look way better after the last patch.",
+        "Who else remembers when this game first launched?",
+        "I just spent 10 hours playing and forgot to eat.",
+    ]
+
+    # ─── Paraphrase templates for meaningful variation ───
+    paraphrase_templates = [
+        "Basically, {base}",
+        "I agree. {base}",
+        "Can confirm this works. {base}",
+        "This is the correct answer. {base}",
+        "Seconding this advice. {base}",
+        "{base} This strategy helped me a lot.",
+        "{base} Tested this myself and it works perfectly.",
+        "{base} This is the most reliable method.",
+        "From my experience, {base}",
+        "Just tried this. {base}",
+        "This is solid advice: {base}",
+        "{base} Would definitely recommend trying this.",
+        "Here's what worked for me: {base}",
+        "After hours of trying, I can say: {base}",
+        "{base} This made a huge difference.",
     ]
 
     dataset = []
@@ -308,24 +343,26 @@ def generate_balanced_dataset():
                 "true_label": 1
             })
             
-        # 15 paraphrased positive
-        for _ in range(15):
+        # 15 paraphrased positives using meaningful templates
+        for i in range(15):
             base = random.choice(positive_comments)
-            paraphrased = base + (" Highly recommend." if random.random() > 0.5 else " Works every time.")
+            template = paraphrase_templates[i % len(paraphrase_templates)]
+            paraphrased = template.format(base=base)
             dataset.append({"query": query, "comment": paraphrased, "true_label": 1})
 
-        # 15 hard negatives
+        # 8 hard negatives (from DIFFERENT games only to reduce overlap)
+        current_game = game_labels[query]
         hard_negatives = []
         for other_q, other_c in queries_data.items():
-            if other_q != query:
+            if game_labels[other_q] != current_game:
                 hard_negatives.extend(other_c)
                 
-        selected_hard_negatives = random.sample(hard_negatives, 15)
+        selected_hard_negatives = random.sample(hard_negatives, 8)
         for comment in selected_hard_negatives:
             dataset.append({"query": query, "comment": comment, "true_label": 0})
             
-        # 10 generic negatives
-        for _ in range(10):
+        # 17 generic negatives (more clearly off-topic data)
+        for _ in range(17):
             dataset.append({"query": query, "comment": random.choice(generic_negatives), "true_label": 0})
             
     random.seed(42)

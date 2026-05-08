@@ -35,13 +35,14 @@ BI_ENCODER_MODELS = [
 ]
 
 DEFAULT_BI_ENCODER = "multi-qa-MiniLM-L6-cos-v1"
+WEAK_BI_ENCODER = "paraphrase-albert-small-v2"
 
 # ─── Cross-Encoder (for reranking) ──────────────────────────────────────────
 CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 CROSS_ENCODER_TOP_K = 20
 
 # ─── Threshold & Evaluation ─────────────────────────────────────────────────
-THRESHOLD_SWEEP_RANGE = (0.05, 0.75, 0.01)  
+THRESHOLD_SWEEP_RANGE = (-0.15, 0.80, 0.01)  
 TEST_SPLIT_RATIO = 250
 VAL_SPLIT_RATIO = 250
 RANDOM_SEED = 42

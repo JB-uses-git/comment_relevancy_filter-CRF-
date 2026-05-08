@@ -59,7 +59,7 @@ def main():
     print("\n[4] Creating Val/Test Splits & Tuning Threshold...")
     train_df, val_df, test_df = create_splits(df)
 
-    optimal_threshold, best_f1, _, _ = find_optimal_threshold(
+    optimal_threshold, best_f1, f1_scores_list, thresholds_array = find_optimal_threshold(
         val_df["true_label"].values, 
         val_df["relevance_score"].values
     )
@@ -75,7 +75,7 @@ def main():
 
     print("\n[6] Generating ML Output Graphs...")
     from visualizations import (
-        plot_score_distribution, plot_confusion_matrix, plot_precision_recall_curve, plot_roc_curve
+        plot_score_distribution, plot_confusion_matrix, plot_precision_recall_curve, plot_roc_curve, plot_f1_vs_threshold
     )
     import matplotlib
     matplotlib.use("Agg")  # Run headless without opening windows
@@ -85,9 +85,68 @@ def main():
     plot_confusion_matrix(test_df["true_label"].values, test_preds, optimal_threshold, "test", save=True)
     plot_precision_recall_curve(test_df["true_label"].values, test_df["relevance_score"].values, optimal_threshold, "test", save=True)
     plot_roc_curve(test_df["true_label"].values, test_df["relevance_score"].values, "test", save=True)
+    plot_f1_vs_threshold(thresholds_array, f1_scores_list, optimal_threshold, best_f1, save=True)
     print("Graphs saved to /output/ folder!")
 
-    # 6. Interactive Search Mode
+    # 7. Weak Baseline Model Comparison
+    print("\n[7] Running Weak Baseline Model for Comparison...")
+    from config import WEAK_BI_ENCODER
+    from visualizations import (
+        plot_comparison_f1_curves, plot_comparison_pr_curves,
+        plot_comparison_roc_curves, plot_comparison_metrics_bar
+    )
+
+    weak_engine = EmbeddingEngine(WEAK_BI_ENCODER)
+
+    print(f"Encoding Queries with baseline: {WEAK_BI_ENCODER}...")
+    weak_query_embs = weak_engine.encode(queries, show_progress=False)
+
+    print(f"Encoding Comments with baseline: {WEAK_BI_ENCODER}...")
+    weak_comment_embs = weak_engine.encode(comments, show_progress=False)
+
+    weak_scores = np.sum(weak_query_embs * weak_comment_embs, axis=1)
+    df["weak_score"] = weak_scores
+
+    # Re-split (same seed = identical split, but now has weak_score column)
+    _, weak_val_df, weak_test_df = create_splits(df)
+
+    weak_opt_threshold, weak_best_f1, weak_f1_list, weak_thresholds = find_optimal_threshold(
+        weak_val_df["true_label"].values,
+        weak_val_df["weak_score"].values
+    )
+
+    print("\n[8] Weak Baseline — Test Set Evaluation")
+    weak_test_results = evaluate_threshold(
+        weak_test_df["true_label"].values,
+        weak_test_df["weak_score"].values,
+        weak_opt_threshold,
+        "test (baseline)",
+        queries=weak_test_df["query"].values
+    )
+
+    # 8. Generate Comparison Graphs
+    print("\n[9] Generating Model Comparison Graphs...")
+    main_label = "Multi-QA MiniLM (Ours)"
+    weak_label = "ALBERT-Small (Baseline)"
+
+    plot_comparison_f1_curves(
+        thresholds_array, f1_scores_list, optimal_threshold, best_f1, main_label,
+        weak_thresholds, weak_f1_list, weak_opt_threshold, weak_best_f1, weak_label
+    )
+    plot_comparison_pr_curves(
+        test_df["true_label"].values,
+        test_df["relevance_score"].values, main_label,
+        weak_test_df["weak_score"].values, weak_label
+    )
+    plot_comparison_roc_curves(
+        test_df["true_label"].values,
+        test_df["relevance_score"].values, main_label,
+        weak_test_df["weak_score"].values, weak_label
+    )
+    plot_comparison_metrics_bar(test_results, main_label, weak_test_results, weak_label)
+    print("Comparison graphs saved to /output/ folder!")
+
+    # 9. Interactive Search Mode
     print("\n" + "="*60)
     print("   [GAME] INTRODUCING DYNAMIC CUSTOM SEARCH")
     print("="*60)
